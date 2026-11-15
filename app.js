@@ -396,7 +396,7 @@ const LOGIN_ART = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAw
    ห้อง อาจารย์ จำนวนนักศึกษา และเวลา GEN/LNG เป็นข้อมูลสมมติ (ชื่ออาจารย์ใช้ ก–ฉ ตามดีไซน์) */
 (function (root) {
   const ROOMS = [
-    { id: 'CB30603', type: 'คอมพิวเตอร์', cap: 40, mac: 40, win: 0, broken: 2, projector: true, mic: true, status: 'ready', note: 'เสีย 2 เครื่อง' },
+    { id: 'CB30603', type: 'คอมพิวเตอร์', cap: 40, mac: 40, win: 0, broken: 2, projector: true, mic: true, status: 'ready', note: '' },
     { id: 'CB30604', type: 'คอมพิวเตอร์', cap: 45, mac: 0, win: 45, broken: 0, projector: true, mic: false, status: 'ready', note: '' },
     { id: 'CB30607', type: 'แล็บ', cap: 40, mac: 0, win: 0, broken: 0, projector: true, mic: true, status: 'ready', note: 'แล็บอิเล็กทรอนิกส์และอุปกรณ์ส่วนเชื่อมต่อ' },
     { id: 'CB30608', type: 'บรรยาย', cap: 80, mac: 0, win: 0, broken: 0, projector: true, mic: true, status: 'ready', note: '' },
@@ -1338,6 +1338,9 @@ function toastsView() {
 }
 
 /* CMMschedule — modals, actions, drag & drop movement, exports, init */
+// Old versions copied the broken-machine count into the note ("เสีย 2 เครื่อง"). That text is cleared when the
+// room is opened; if someone types it into the note themselves, it is read as the broken-machine count.
+const autoNote = n => /^\s*เสีย\s*\d+\s*เครื่อง\s*$/.test(String(n || ''));
 
 /* ---------------- modals ---------------- */
 function openModal(type, id, extra) {
@@ -1346,7 +1349,7 @@ function openModal(type, id, extra) {
   if (type === 'import') Object.assign(m, { rows: null, file: '' });
   if (type === 'course') { const co = c.find(x => x.id === id); m.f = co ? clone(co) : { id: '', code: 'CMM ', name: '', year: 1, students: 40, teacher: (tch[0] || {}).id, elective: false, parts: [{ kind: 'บรรยาย', type: 'บรรยาย', hours: 3, equip: ['projector'], room: '' }], isNew: true }; }
   if (type === 'global') { const g = D.globals.find(x => x.id === id); m.f = g ? clone(g) : { id: '', title: '', kind: 'meeting', slots: [], years: [], note: '', isNew: true }; }
-  if (type === 'room') { const r = D.rooms.find(x => x.id === id); m.f = r ? clone(r) : { id: '', type: 'บรรยาย', cap: 40, mac: 0, win: 0, broken: 0, projector: true, mic: false, status: 'ready', closedUntil: '', note: '', isNew: true }; m.f.hasMac = !!m.f.mac; m.f.hasWin = !!m.f.win; }
+  if (type === 'room') { const r = D.rooms.find(x => x.id === id); m.f = r ? clone(r) : { id: '', type: 'บรรยาย', cap: 40, mac: 0, win: 0, broken: 0, projector: true, mic: false, status: 'ready', closedUntil: '', note: '', isNew: true }; m.f.hasMac = !!m.f.mac; m.f.hasWin = !!m.f.win; if (autoNote(m.f.note)) m.f.note = ''; }
   if (type === 'newTerm') m.f = { sem: 1, year: 2570, start: '2027-06-08' };
   if (type === 'send') m.f = { msg: '' };
   if (type === 'emailPreview' || type === 'emailSend') { const ids = teachersWithSessions(); m.f = { tid: ids[0], sel: ids.filter(i => (tch.find(t => t.id === i) || {}).email) }; }
@@ -1411,10 +1414,11 @@ function modalView() {
         <div class="row" style="gap:6px"><label class="chk" style="margin-right:4px"><input type="checkbox" data-f="m.hasMac" data-rr="1" ${f.hasMac ? 'checked' : ''}>คอมพิวเตอร์ Mac</label>${f.hasMac ? `<input class="inp sq" type="number" style="width:90px;min-height:32px" data-f="m.mac" value="${f.mac}"> เครื่อง` : ''}</div>
         <div class="row" style="gap:6px"><label class="chk" style="margin-right:4px"><input type="checkbox" data-f="m.hasWin" data-rr="1" ${f.hasWin ? 'checked' : ''}>คอมพิวเตอร์ Windows</label>${f.hasWin ? `<input class="inp sq" type="number" style="width:90px;min-height:32px" data-f="m.win" value="${f.win}"> เครื่อง` : ''}</div>
         <label class="chk"><input type="checkbox" data-f="m.projector" ${f.projector ? 'checked' : ''}>โปรเจกเตอร์</label><label class="chk"><input type="checkbox" data-f="m.mic" ${f.mic ? 'checked' : ''}>ไมค์</label>
-        ${f.hasMac || f.hasWin ? `<div class="row" style="gap:6px;margin-top:4px"><span class="small">เครื่องเสีย</span><input class="inp sq" type="number" min="0" style="width:90px;min-height:32px" data-f="m.broken" value="${f.broken || 0}"><span class="small">เครื่อง</span></div>` : ''}
         <div class="lbl" style="margin-top:14px">สถานะห้องเรียน</div>
         <div class="row"><label class="chk"><input type="radio" name="rst" value="ready" data-f="m.status" data-rr="1" ${f.status !== 'closed' ? 'checked' : ''}>พร้อมใช้งาน</label><label class="chk"><input type="radio" name="rst" value="closed" data-f="m.status" data-rr="1" ${f.status === 'closed' ? 'checked' : ''}>งดใช้</label>${f.status === 'closed' ? `<input class="inp sq" type="date" style="width:170px;min-height:32px" data-f="m.closedUntil" value="${esc(f.closedUntil || '')}" aria-label="งดใช้ถึงวันที่">` : ''}</div>
-        <div class="fld" style="margin-top:10px"><label>หมายเหตุ</label><input class="inp sq" data-f="m.note" value="${esc(f.note || '')}"></div>${errP}
+        ${f.hasMac || f.hasWin ? `<div class="row" style="gap:6px;margin-top:8px"><span>เครื่องที่เสีย (ใช้งานไม่ได้)</span><input class="inp sq" type="number" min="0" style="width:90px;min-height:32px" data-f="m.broken" value="${f.broken || 0}"><span>เครื่อง</span></div>
+        <p class="small muted" style="margin:4px 0 0">ช่อง "สถานะ" ในตารางห้องแสดงตามจำนวนนี้ · ซ่อมเสร็จแล้วให้ใส่ 0</p>` : ''}
+        <div class="fld" style="margin-top:10px"><label>หมายเหตุ</label><input class="inp sq" data-f="m.note" value="${esc(f.note || '')}" placeholder="ข้อความเพิ่มเติม (ไม่มีผลกับสถานะ)"></div>${errP}
         ${ft('roomSave', f.isNew ? 'บันทึกห้อง' : 'บันทึกการแก้ไข', f.isNew ? '' : '<button class="btn ghost sm" style="margin-right:auto;color:var(--red);border-color:var(--red)" data-act="roomDel">ลบห้อง</button>')}`;
       break;
     }
@@ -1842,8 +1846,10 @@ const ACT = {
     if (!f.id) { m.err = 'กรอกรหัสห้อง'; return scheduleRender(); }
     if (f.isNew && D.rooms.find(r => r.id === f.id)) { m.err = 'มีรหัสห้องนี้แล้ว'; return scheduleRender(); }
     if (!(+f.cap > 0)) { m.err = 'กรอกความจุ'; return scheduleRender(); }
-    const v = { id: f.id, type: f.type, cap: +f.cap, mac: f.hasMac ? (+f.mac || 0) : 0, win: f.hasWin ? (+f.win || 0) : 0, broken: (f.hasMac || f.hasWin) ? (+f.broken || 0) : 0, projector: !!f.projector, mic: !!f.mic, status: f.status, closedUntil: f.status === 'closed' ? f.closedUntil : '', note: f.note || '' };
-    if (v.broken && !v.note) v.note = 'เสีย ' + v.broken + ' เครื่อง';
+    const v = { id: f.id, type: f.type, cap: +f.cap, mac: f.hasMac ? (+f.mac || 0) : 0, win: f.hasWin ? (+f.win || 0) : 0, broken: (f.hasMac || f.hasWin) ? (+f.broken || 0) : 0, projector: !!f.projector, mic: !!f.mic, status: f.status, closedUntil: f.status === 'closed' ? f.closedUntil : '', note: String(f.note || '').trim() };
+    const machines = v.mac + v.win;
+    if (machines && autoNote(v.note)) { v.broken = +v.note.match(/\d+/)[0]; v.note = ''; }
+    if (v.broken < 0 || v.broken > machines) { m.err = 'จำนวนเครื่องที่เสียต้องอยู่ระหว่าง 0–' + machines + ' เครื่อง'; return scheduleRender(); }
     mut('app/rooms', d => { const i = d.list.findIndex(r => r.id === v.id); if (i >= 0) d.list[i] = v; else d.list.push(v); });
     notifyAfterSent('ข้อมูลห้อง ' + v.id);
     S.ui.modal = { type: 'saved', f: {} }; scheduleRender();
