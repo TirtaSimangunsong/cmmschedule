@@ -835,7 +835,7 @@ function timeline(o) {
   return `<div class="tt-wrap" ${o.id ? `id="${o.id}"` : ''}><div class="tt">
     <div class="tt-head"><div class="dl">DAY</div><div class="tt-axis">${ticks.join('')}</div></div>
     <div class="tt-body"><div style="position:absolute;left:130px;right:0;top:0;bottom:0;pointer-events:none"><div class="lunch" style="left:${pct(12.5)}%;width:${pct(13.5) - pct(12.5)}%;top:0;bottom:0"><span>LUNCH</span></div></div>${rows}</div>
-    <div class="tt-scroll"></div></div></div>`;
+    </div></div>`;
 }
 
 function emptyTimeline() { return timeline({ ctx: { rooms: [], teachers: [], globals: [], courses: [] }, entries: [], v: { mode: 'year', key: 1 }, A: null }); }
