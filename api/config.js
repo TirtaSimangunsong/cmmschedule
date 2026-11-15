@@ -1,0 +1,10 @@
+// GET /api/config — gives the browser the public Supabase settings.
+// The anon key is meant to be public; access is protected by RLS in the database.
+module.exports = (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(200).json({
+    supabaseUrl: process.env.SUPABASE_URL || '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+    emailEnabled: Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM)
+  });
+};
