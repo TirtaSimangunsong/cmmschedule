@@ -686,11 +686,16 @@ let rq = false;
 function scheduleRender() { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; render(); }); }
 function render() {
   const app = $('#app'); if (!app) return;
+  // don't rebuild the page mid-drag (it would wipe the drop zones); render once the block is dropped
+  if (typeof drag !== 'undefined' && drag && drag.started) { S.ui.renderAfterDrag = true; return; }
   const anim = S.ui.anim; const from = S.ui.flipFrom;
   const first = {};
   if (anim) $$('[data-flip]').forEach(el => first[el.dataset.flip] = el.getBoundingClientRect());
   const fx = captureFocus();
+  const sx = $$('.tt-wrap').map((w, i) => [w.id || i, w.scrollLeft]);
   app.innerHTML = view();
+  // keep the timetable's horizontal scroll position across re-renders
+  const ws = $$('.tt-wrap'); sx.forEach(([k, x]) => { const w = typeof k === 'string' ? document.getElementById(k) : ws[k]; if (w) w.scrollLeft = x; });
   if (S.page !== S.ui._lastPage) { const pg = $('.page', app); if (pg) pg.classList.add('enter'); S.ui._lastPage = S.page; }
   if (S.ui.modal && S.ui._modalSeen !== S.ui.modal) { const mb = $('.modal-bg', app); if (mb) mb.classList.add('in'); S.ui._modalSeen = S.ui.modal; }
   if (S.ui.drop && S.ui._dropSeen !== S.ui.drop) { $$('.drop', app).forEach(d => d.classList.add('in')); }
@@ -1661,7 +1666,7 @@ async function makePDF(tid) {
   await Promise.all([loadScript(LIBS.h2c), loadScript(LIBS.pdf)]);
   const { c, entries } = pubData(); const M = L.maps(c);
   const pages = tid ? [{ v: { mode: 'teacher', key: tid }, title: 'ตารางสอน ' + (M.T[tid] || {}).name }] : [1, 2, 3, 4].map(y => ({ v: { mode: 'year', key: y }, title: 'ตารางเรียนชั้นปีที่ ' + y }));
-  const holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-14000px;top:0;width:1400px;background:#fff';
+  const holder = document.createElement('div'); holder.className = 'pdf-hold'; holder.style.cssText = 'position:fixed;left:-14000px;top:0;width:1400px;background:#fff';
   document.body.appendChild(holder);
   const { jsPDF } = window.jspdf; const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   try {
@@ -1902,7 +1907,7 @@ function focusEntry(id, keepIssue) {
   if (e.d != null) { if (v.mode === 'year') v.key = co.year; else if (v.mode === 'room') v.key = e.r; else v.key = co.teacher; }
   S.ui.sel = id; S.ui.hl = [id]; if (!keepIssue) setTimeout(() => { S.ui.hl = []; }, 3200);
   scheduleRender();
-  setTimeout(() => { const el = $(`[data-flip="${id}"]`); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
+  setTimeout(() => { const el = $(`[data-flip="${id}"]`); if (el) el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); }, 60);
 }
 function nextReview(force) {
   const A = L.analyze(ctx(), D.entries); const placed = A.placed.slice().sort((a, b) => a.d - b.d || (a.h > b.h ? 1 : -1) || a.id.localeCompare(b.id));
@@ -1978,7 +1983,8 @@ document.addEventListener('pointermove', e => {
   if (!drag.started) { if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return; startDrag(e); }
   moveDrag(e);
 });
-document.addEventListener('pointerup', e => { if (!drag) return; if (drag.started) { endDrag(e); justDragged = true; setTimeout(() => { justDragged = false; }, 60); } drag = null; });
+document.addEventListener('pointerup', e => { if (!drag) return; if (drag.started) { endDrag(e); justDragged = true; setTimeout(() => { justDragged = false; }, 60); } drag = null; flushRenderAfterDrag(); });
+function flushRenderAfterDrag() { if (S.ui.renderAfterDrag) { S.ui.renderAfterDrag = false; scheduleRender(); } }
 function startDrag(e) {
   drag.started = true;
   const c = ctx(); const M = L.maps(c); const ents = D.entries; const entry = ents.find(x => x.id === drag.eid); if (!entry) { drag = null; return; }
@@ -1992,6 +1998,7 @@ function startDrag(e) {
   g.insertAdjacentHTML('beforeend', '<span class="gt"></span>');
   drag.off = { x: isChip ? 40 : e.clientX - r.left, y: isChip ? 20 : e.clientY - r.top };
   document.body.appendChild(g); drag.ghost = g;
+  drag.last = { clientX: e.clientX, clientY: e.clientY }; drag.timer = setInterval(autoScroll, 16);
   if (!isChip) drag.el.classList.add('dim');
   document.body.classList.add('dragging');
   const v = vstate('sch', c);
@@ -2016,6 +2023,7 @@ function startDrag(e) {
 }
 function moveDrag(e) {
   const g = drag.ghost; if (!g) return;
+  drag.last = { clientX: e.clientX, clientY: e.clientY };
   g.style.left = (e.clientX - drag.off.x) + 'px'; g.style.top = (e.clientY - drag.off.y) + 'px';
   const hit = document.elementFromPoint(e.clientX, e.clientY); const z = hit && hit.closest('.zone');
   if (drag.over && drag.over !== z) drag.over.classList.remove('over');
@@ -2023,9 +2031,24 @@ function moveDrag(e) {
   const gt = $('.gt', g);
   if (z) { z.classList.add('over'); gt.textContent = (z.classList.contains('bad') ? '⚠ ' : '→ ') + z.dataset.label; gt.style.background = z.classList.contains('bad') ? 'var(--red)' : 'var(--navy)'; }
   else gt.textContent = 'ลากไปวางในช่องเวลา';
-  const H = window.innerHeight; if (e.clientY < 90) window.scrollBy(0, -12); else if (e.clientY > H - 60) window.scrollBy(0, 12);
 }
-function cleanupDrag() { $$('.zone').forEach(z => z.remove()); document.body.classList.remove('dragging'); if (drag && drag.el) drag.el.classList.remove('dim'); }
+// While dragging, holding the block near an edge keeps scrolling: left/right inside the timetable, up/down the page.
+function autoScroll() {
+  if (!drag || !drag.last) return;
+  const { clientX: x, clientY: y } = drag.last; let moved = false;
+  const w = $('#tt-main');
+  if (w && w.scrollWidth > w.clientWidth) {
+    const r = w.getBoundingClientRect();
+    if (y > r.top && y < r.bottom) {
+      const dx = x < r.left + 130 + 50 ? -14 : x > r.right - 50 ? 14 : 0;
+      const before = w.scrollLeft; if (dx) w.scrollLeft += dx; moved = w.scrollLeft !== before;
+    }
+  }
+  const H = window.innerHeight;
+  if (y < 90) { window.scrollBy(0, -12); moved = true; } else if (y > H - 60) { window.scrollBy(0, 12); moved = true; }
+  if (moved) moveDrag(drag.last);
+}
+function cleanupDrag() { if (drag && drag.timer) clearInterval(drag.timer); $$('.zone').forEach(z => z.remove()); document.body.classList.remove('dragging'); if (drag && drag.el) drag.el.classList.remove('dim'); }
 function endDrag() {
   const z = drag.over; const g = drag.ghost; cleanupDrag();
   if (z) {
@@ -2036,7 +2059,7 @@ function endDrag() {
     g.animate([{ left: gr.left + 'px', top: gr.top + 'px' }, { left: r.left + 'px', top: r.top + 'px', opacity: .3 }], { duration: 260, easing: 'ease-in' }).onfinish = () => g.remove();
   }
 }
-function cancelDrag() { if (drag.ghost) drag.ghost.remove(); cleanupDrag(); drag = null; }
+function cancelDrag() { if (drag.ghost) drag.ghost.remove(); cleanupDrag(); drag = null; flushRenderAfterDrag(); }
 
 /* ---------------- init ---------------- */
 async function init() {
