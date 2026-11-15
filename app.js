@@ -799,7 +799,9 @@ function viewCtrl(k, c) {
 const SHORT = { room: 'ห้องไม่ตรง', cap: 'ห้องจุไม่พอ', equip: 'อุปกรณ์ไม่พอ', teacher: 'อาจารย์ไม่สะดวก', global: 'ชนเงื่อนไขส่วนกลาง' };
 const CLASH_SHORT = { room: 'ห้องชน', teacher: 'อาจารย์ชน', year: 'วิชาชน' };
 const errShort = e => e.cat === 'clash' ? CLASH_SHORT[e.kind] : SHORT[e.cat];
-const pct = t => ((t - 8) / 9.5 * 100);
+// Timeline runs 7:45–17:45 so the 8:00 label isn't cut off by the fixed DAY column.
+const T_START = 7.75, T_END = 17.75;
+const pct = t => ((t - T_START) / (T_END - T_START) * 100);
 
 /* timeline (ตารางเรียนแบบไทม์ไลน์) */
 function timeline(o) {
